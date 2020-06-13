@@ -44,11 +44,11 @@ class SmartDimmer(SmartPlug):
 
     @requires_update
     async def set_brightness(self, brightness: int, *, transition: int = None):
-        """Set the new dimmer brightness level in percentage.
+        """Set the new dimmer brightness level in percentage > 0.
 
         :param int transition: transition duration in milliseconds.
-            If a transition is used the light will turn on the light if brightness > 0
-            and will turn off the light if brightness == 0
+            This will cause the light to turn on.
+            See `set_dimmer_transition()` for more details.
         """
         if not self.is_dimmable:
             raise SmartDeviceException("Device is not dimmable.")
@@ -58,27 +58,55 @@ class SmartDimmer(SmartPlug):
                 "Brightness must be integer, " "not of %s.", type(brightness)
             )
 
-        if not 0 <= brightness <= 100:
+        if not 0 < brightness <= 100:
             raise ValueError("Brightness value %s is not valid." % brightness)
 
-        if transition is not None:
-            if not isinstance(transition, int):
-                raise ValueError(
-                    "Transition must be integer, " "not of %s.", type(transition)
-                )
-            if transition <= 0:
-                raise ValueError("Transition value %s is not valid." % transition)
-
         if transition:
-            return await self._query_helper(
-                self.DIMMER_SERVICE,
-                "set_dimmer_transition",
-                {"brightness": brightness, "duration": transition},
-            )
+            return await self.set_dimmer_transition(brightness, transition)
         else:
             return await self._query_helper(
                 self.DIMMER_SERVICE, "set_brightness", {"brightness": brightness}
             )
+
+    async def turn_off(self, *, transition: int = None) -> None:
+        """Turn the bulb off."""
+        if transition:
+            await self.set_dimmer_transition(brightness=0, transition=transition)
+        else:
+            await super().turn_off()
+
+    @requires_update
+    async def turn_on(self, *, transition: int = None) -> None:
+        """Turn the bulb on."""
+        if transition:
+            await self.set_dimmer_transition(
+                brightness=self.brightness, transition=transition
+            )
+        else:
+            await super().turn_on()
+
+    async def set_dimmer_transition(self, brightness: int, transition: int):
+        """Turn the bulb to brightness percentage over transition milliseconds."""
+        if not isinstance(brightness, int):
+            raise ValueError(
+                "Brightness must be integer, " "not of %s.", type(brightness)
+            )
+
+        if not 0 <= brightness <= 100:
+            raise ValueError("Brightness value %s is not valid." % brightness)
+
+        if not isinstance(transition, int):
+            raise ValueError(
+                "Transition must be integer, " "not of %s.", type(transition)
+            )
+        if transition <= 0:
+            raise ValueError("Transition value %s is not valid." % transition)
+
+        return await self._query_helper(
+            self.DIMMER_SERVICE,
+            "set_dimmer_transition",
+            {"brightness": brightness, "duration": transition},
+        )
 
     @property  # type: ignore
     @requires_update
